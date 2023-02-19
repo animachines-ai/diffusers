@@ -883,7 +883,7 @@ class StableDiffusionInpaintPipeline(DiffusionPipeline):
             # 11. Post-processing
             image = self.decode_latents(latents)
 
-            # 2. Run safety checker
+            # 12. Run safety checker
             image, has_nsfw_concept = self.run_safety_checker(image, device, prompt_embeds.dtype)
 
         # Offload last model to CPU

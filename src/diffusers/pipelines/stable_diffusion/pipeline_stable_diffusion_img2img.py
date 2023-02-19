@@ -426,12 +426,13 @@ class StableDiffusionImg2ImgPipeline(DiffusionPipeline):
         return image, has_nsfw_concept
 
     # Copied from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.decode_latents
-    def decode_latents(self, latents):
+    def decode_latents(self, latents, numpyfy=True):
         latents = 1 / self.vae.config.scaling_factor * latents
         image = self.vae.decode(latents).sample
         image = (image / 2 + 0.5).clamp(0, 1)
-        # we always cast to float32 as this does not cause significant overhead and is compatible with bfloat16
-        image = image.cpu().permute(0, 2, 3, 1).float().numpy()
+        if numpyfy:
+            # we always cast to float32 as this does not cause significant overhead and is compatible with bfloat16
+            image = image.cpu().permute(0, 2, 3, 1).float().numpy()
         return image
 
     # Copied from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_extra_step_kwargs
@@ -706,15 +707,28 @@ class StableDiffusionImg2ImgPipeline(DiffusionPipeline):
                     if callback is not None and i % callback_steps == 0:
                         callback(i, t, latents)
 
-        # 9. Post-processing
-        image = self.decode_latents(latents)
+        if output_type == "latent":
+            image = latents
+            has_nsfw_concept = None
+        elif output_type == "pil":
+            # 9. Post-processing
+            image = self.decode_latents(latents)
 
-        # 10. Run safety checker
-        image, has_nsfw_concept = self.run_safety_checker(image, device, prompt_embeds.dtype)
+            # 10. Run safety checker
+            image, has_nsfw_concept = self.run_safety_checker(image, device, prompt_embeds.dtype)
 
-        # 11. Convert to PIL
-        if output_type == "pil":
+            # 11. Convert to PIL
             image = self.numpy_to_pil(image)
+        elif output_type == "pt":
+            # 9. Post-processing
+            image = self.decode_latents(latents, numpyfy=False)
+            has_nsfw_concept = None
+        else:
+            # 9. Post-processing
+            image = self.decode_latents(latents)
+
+            # 10. Run safety checker
+            image, has_nsfw_concept = self.run_safety_checker(image, device, prompt_embeds.dtype)
 
         # Offload last model to CPU
         if hasattr(self, "final_offload_hook") and self.final_offload_hook is not None:
