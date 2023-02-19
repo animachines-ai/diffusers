@@ -397,12 +397,13 @@ class StableDiffusionPipeline(DiffusionPipeline):
             has_nsfw_concept = None
         return image, has_nsfw_concept
 
-    def decode_latents(self, latents):
+    def decode_latents(self, latents, numpyfy=True):
         latents = 1 / self.vae.config.scaling_factor * latents
         image = self.vae.decode(latents).sample
         image = (image / 2 + 0.5).clamp(0, 1)
-        # we always cast to float32 as this does not cause significant overhead and is compatible with bfloat16
-        image = image.cpu().permute(0, 2, 3, 1).float().numpy()
+        if numpyfy:
+            # we always cast to float32 as this does not cause significant overhead and is compatible with bfloat16
+            image = image.cpu().permute(0, 2, 3, 1).float().numpy()
         return image
 
     def prepare_extra_step_kwargs(self, generator, eta):
@@ -673,6 +674,10 @@ class StableDiffusionPipeline(DiffusionPipeline):
 
             # 10. Convert to PIL
             image = self.numpy_to_pil(image)
+        elif output_type == "pt":
+            # 8. Post-processing
+            image = self.decode_latents(latents, numpyfy=False)
+            has_nsfw_concept = None
         else:
             # 8. Post-processing
             image = self.decode_latents(latents)
